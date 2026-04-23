@@ -1,0 +1,607 @@
+openapi: 3.0.3
+info:
+  title: Personen API
+  version: 1.0.0
+  description: |
+    Swagger/OpenAPI-Dokumentation für das hochgeladene Express-/MySQL-Projekt.
+
+    **Wichtige Hinweise zur bestehenden Implementierung:**
+    - Alle Routen werden durch `authenticateToken` geschützt.
+    - Der Token muss als `Authorization: Bearer <token>` gesendet werden.
+    - Die Routenstruktur ist technisch vorhanden, aber nicht vollständig REST-konform, da POST/PUT/DELETE über eigene Basispfade laufen.
+    - Der Root-Endpunkt `/` und einige Validierungsfehler liefern aktuell Plain-Text bzw. nicht immer passende HTTP-Statuscodes.
+servers:
+  - url: http://localhost:3000
+    description: Lokale Entwicklung
+security:
+  - bearerAuth: []
+tags:
+  - name: Allgemein
+  - name: Personen
+  - name: Profile
+  - name: Suche
+paths:
+  /:
+    get:
+      tags: [Allgemein]
+      summary: Beispiel-Indexroute mit Query-Parametern
+      description: |
+        Prüft die Query-Parameter `name` und `age` und gibt einen Text zurück.
+        Hinweis: Die bestehende Implementierung antwortet bei ungültigen Eingaben ebenfalls mit HTTP 200.
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+          description: Name der Person; darf keine Zahl sein.
+          example: Max
+        - in: query
+          name: age
+          required: true
+          schema:
+            type: integer
+          description: Alter als Zahl.
+          example: 30
+      responses:
+        '200':
+          description: Erfolgreiche oder validierungsnahe Textantwort der aktuellen Implementierung.
+          content:
+            text/plain:
+              schema:
+                type: string
+              examples:
+                ok:
+                  summary: Erfolgreiche Antwort
+                  value: 'Name: Max Alter: 30'
+                invalid_name:
+                  summary: Ungültiger Name
+                  value: Name muss vorhanden sein und darf keine Zahl sein.
+                invalid_age:
+                  summary: Ungültiges Alter
+                  value: Alter muss eine Zahl sein.
+
+  /hello:
+    get:
+      tags: [Allgemein]
+      summary: Einfacher Testendpunkt
+      responses:
+        '200':
+          description: Textantwort
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Hallo von Express in Docker!
+
+  /personen:
+    get:
+      tags: [Personen]
+      summary: Alle Personen abrufen
+      description: Gibt alle Personen mit aktuellem Beruf und Arbeitgeber zurück.
+      responses:
+        '200':
+          description: Liste aller Personen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonListResponse'
+        '500':
+          description: Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /personen/{id}:
+    get:
+      tags: [Personen]
+      summary: Einzelne Person per ID abrufen
+      parameters:
+        - $ref: '#/components/parameters/IdPathParam'
+      responses:
+        '200':
+          description: Person gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonListResponse'
+        '400':
+          description: Ungültige ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 400
+                message: ID muss eine Zahl sein
+        '404':
+          description: Keine Person gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: keine Personen gefunden
+        '500':
+          description: Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /personenpost:
+    post:
+      tags: [Personen]
+      summary: Neue Person anlegen
+      description: Legt eine neue Person an.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonInput'
+            example:
+              vorname: Maria
+              nachname: Mustermann
+              plz: '50667'
+              strasse: Domplatz 1
+              ort: Koeln
+              telefonnummer: '015199999999'
+              email: maria.mustermann@example.com
+      responses:
+        '201':
+          description: Person erfolgreich erstellt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                    example: 201
+                  message:
+                    type: string
+                    example: Person erstellt
+                  insertId:
+                    type: integer
+                    example: 6
+        '400':
+          description: Ungültige Eingabedaten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '500':
+          description: Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /personenput/{id}:
+    put:
+      tags: [Personen]
+      summary: Person vollständig aktualisieren
+      parameters:
+        - $ref: '#/components/parameters/IdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonInput'
+      responses:
+        '200':
+          description: Person erfolgreich aktualisiert
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Person aktualisiert
+        '400':
+          description: Ungültige ID oder ungültige Eingabedaten
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: Person nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Person nicht gefunden
+        '500':
+          description: Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /personendelete/{id}:
+    delete:
+      tags: [Personen]
+      summary: Person löschen
+      parameters:
+        - $ref: '#/components/parameters/IdPathParam'
+      responses:
+        '200':
+          description: Person gelöscht
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Person gelöscht
+        '400':
+          description: Ungültige ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 400
+                message: ID muss eine Zahl sein
+        '404':
+          description: Person nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Person nicht gefunden
+        '500':
+          description: Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /personenprofil/{id}:
+    get:
+      tags: [Profile]
+      summary: Vollständiges Profil einer Person abrufen
+      description: Aggregiert Basisdaten, Anstellungen, Hobbys, Ausbildungen und Sprachen.
+      parameters:
+        - $ref: '#/components/parameters/IdPathParam'
+      responses:
+        '200':
+          description: Vollständiges Profil der Person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          description: Ungültige ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Person nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Person nicht gefunden
+        '500':
+          description: Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /personensuche:
+    get:
+      tags: [Suche]
+      summary: Personen über kombinierbare Filter suchen
+      description: |
+        Sucht Personen anhand beliebiger Kombination von Query-Parametern.
+        Alle Parameter sind optional.
+      parameters:
+        - in: query
+          name: vorname
+          schema: { type: string }
+          example: Anna
+        - in: query
+          name: nachname
+          schema: { type: string }
+          example: Schneider
+        - in: query
+          name: ort
+          schema: { type: string }
+          example: Berlin
+        - in: query
+          name: beruf
+          schema: { type: string }
+          example: Softwareentwickler
+        - in: query
+          name: branche
+          schema: { type: string }
+          example: IT
+        - in: query
+          name: arbeitgeber
+          schema: { type: string }
+          example: TechSoft GmbH
+        - in: query
+          name: hobby
+          schema: { type: string }
+          example: Joggen
+        - in: query
+          name: sprache
+          schema: { type: string }
+          example: Englisch
+        - in: query
+          name: sprachniveau
+          schema: { type: string }
+          example: C1
+        - in: query
+          name: ausbildung
+          schema: { type: string }
+          example: Informatik
+        - in: query
+          name: abschluss
+          schema: { type: string }
+          example: Bachelor
+      responses:
+        '200':
+          description: Trefferliste
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonListResponse'
+        '404':
+          description: Keine Personen gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Keine Personen gefunden
+        '500':
+          description: Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Alle Endpunkte werden über den Authorization-Header geschützt.
+        Erwartet wird ein Bearer-Token, das dem in `JWT_TOKEN` hinterlegten Token entspricht.
+
+  parameters:
+    IdPathParam:
+      in: path
+      name: id
+      required: true
+      description: Numerische ID der Person
+      schema:
+        type: integer
+        minimum: 1
+      example: 1
+
+  schemas:
+    PersonInput:
+      type: object
+      additionalProperties: false
+      required:
+        - vorname
+        - nachname
+        - plz
+        - strasse
+        - ort
+        - telefonnummer
+        - email
+      properties:
+        vorname:
+          type: string
+          minLength: 1
+        nachname:
+          type: string
+          minLength: 1
+        plz:
+          type: string
+          minLength: 1
+        strasse:
+          type: string
+          minLength: 1
+        ort:
+          type: string
+          minLength: 1
+        telefonnummer:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+      example:
+        vorname: Anna
+        nachname: Schneider
+        plz: '10115'
+        strasse: Hauptstrasse 12
+        ort: Berlin
+        telefonnummer: '015111111111'
+        email: anna.schneider@example.com
+
+    Person:
+      allOf:
+        - $ref: '#/components/schemas/PersonInput'
+        - type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            beruf:
+              type: string
+              nullable: true
+              example: Softwareentwickler
+            branche:
+              type: string
+              nullable: true
+              example: IT
+            firmenname:
+              type: string
+              nullable: true
+              example: TechSoft GmbH
+            arbeitgeber_ort:
+              type: string
+              nullable: true
+              example: Berlin
+            startdatum:
+              type: string
+              format: date
+              nullable: true
+              example: '2021-03-01'
+
+    Employment:
+      type: object
+      properties:
+        startdatum:
+          type: string
+          format: date
+          nullable: true
+          example: '2021-03-01'
+        beruf:
+          type: string
+          example: Softwareentwickler
+        branche:
+          type: string
+          example: IT
+        firmenname:
+          type: string
+          example: TechSoft GmbH
+        arbeitgeber_ort:
+          type: string
+          example: Berlin
+
+    Education:
+      type: object
+      properties:
+        abschluss:
+          type: string
+          example: Bachelor
+        fachrichtung:
+          type: string
+          example: Informatik
+        einrichtung:
+          type: string
+          example: TU Berlin
+        jahr_von:
+          type: integer
+          example: 2015
+        jahr_bis:
+          type: integer
+          example: 2018
+
+    Language:
+      type: object
+      properties:
+        sprache:
+          type: string
+          example: Deutsch
+        niveau:
+          type: string
+          example: Muttersprache
+
+    PersonProfile:
+      allOf:
+        - $ref: '#/components/schemas/PersonInput'
+        - type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            anstellungen:
+              type: array
+              items:
+                $ref: '#/components/schemas/Employment'
+            hobbys:
+              type: array
+              items:
+                type: string
+              example: [Lesen, Joggen]
+            ausbildungen:
+              type: array
+              items:
+                $ref: '#/components/schemas/Education'
+            sprachen:
+              type: array
+              items:
+                $ref: '#/components/schemas/Language'
+
+    PersonListResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 200
+        personen:
+          type: array
+          items:
+            $ref: '#/components/schemas/Person'
+        row:
+          type: integer
+          example: 5
+
+    ProfileResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 200
+        profil:
+          $ref: '#/components/schemas/PersonProfile'
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 500
+        message:
+          oneOf:
+            - type: string
+            - type: object
+          example: Person nicht gefunden
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: Ungültige Daten
+        errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
